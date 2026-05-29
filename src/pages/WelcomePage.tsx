@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useLanguage } from '@/contexts/LanguageContext'
 import type { Language } from '@/lib/types'
-
+import { trackLanguageSelect } from '@/services/analyticsService'
 const LANGUAGE_BUTTONS: { code: Language; label: string }[] = [
   { code: 'es', label: 'ESPAÑOL' },
   { code: 'en', label: 'ENGLISH' },
@@ -13,9 +13,9 @@ const LANGUAGE_BUTTONS: { code: Language; label: string }[] = [
 export default function WelcomePage() {
   const navigate = useNavigate()
   const { setLanguage } = useLanguage()
-
   function handleSelect(code: Language) {
     setLanguage(code)
+    trackLanguageSelect(code)
     navigate('/loading')
   }
 
