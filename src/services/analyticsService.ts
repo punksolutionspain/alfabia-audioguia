@@ -21,10 +21,25 @@ interface AnalyticsEvent {
   device_type: 'ios' | 'android' | 'desktop' | null
 }
 
+// ─── Batching configuration ───────────────────────────────────────────────────
+//
+// Every event used to be its own INSERT, and every INSERT is its own Postgres
+// transaction with its own WAL fsync (~8.5 kB of disk writes for a few hundred
+// bytes of payload). At ~58 events per visit that exhausted the project's
+// Disk IO Budget. Batching the same events into one INSERT costs roughly the
+// same WAL as a single row, cutting write IO by ~95%.
+//
+// Events are buffered in localStorage, so nothing is lost if the tab closes
+// before a flush: the queue is picked up on the next visit.
+
+const FLUSH_SIZE = 25 // flush as soon as this many events are buffered
+const FLUSH_INTERVAL_MS = 15_000 // ...or after this long, whichever comes first
+const MAX_QUEUE = 500 // hard cap so localStorage can't grow unbounded
+
 // ─── Session ID (unique per browser tab visit) ────────────────────────────────
 
 const SESSION_KEY = 'alfabia-session-id'
-const QUEUE_KEY   = 'alfabia-analytics-queue'
+const QUEUE_KEY = 'alfabia-analytics-queue'
 
 function getOrCreateSessionId(): string {
   const existing = sessionStorage.getItem(SESSION_KEY)
@@ -43,7 +58,7 @@ function detectDeviceType(): 'ios' | 'android' | 'desktop' {
   return 'desktop'
 }
 
-// ─── Offline queue (localStorage) ─────────────────────────────────────────────
+// ─── Buffer (localStorage) ────────────────────────────────────────────────────
 
 function getQueue(): AnalyticsEvent[] {
   try {
@@ -62,22 +77,77 @@ function saveQueue(queue: AnalyticsEvent[]): void {
   }
 }
 
-function enqueue(event: AnalyticsEvent): void {
+function enqueue(event: AnalyticsEvent): number {
   const queue = getQueue()
   queue.push(event)
+  // Drop the oldest events if the buffer somehow grows past the cap
+  if (queue.length > MAX_QUEUE) queue.splice(0, queue.length - MAX_QUEUE)
   saveQueue(queue)
+  return queue.length
+}
+
+// ─── Flushing ─────────────────────────────────────────────────────────────────
+
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+let flushing = false
+
+function cancelScheduledFlush(): void {
+  if (flushTimer !== null) {
+    clearTimeout(flushTimer)
+    flushTimer = null
+  }
+}
+
+function scheduleFlush(): void {
+  if (flushTimer !== null) return
+  flushTimer = setTimeout(() => {
+    flushTimer = null
+    void flushQueue()
+  }, FLUSH_INTERVAL_MS)
 }
 
 async function flushQueue(): Promise<void> {
-  const queue = getQueue()
-  if (queue.length === 0) return
-  const { error } = await supabase.from('analytics_events').insert(queue)
-  if (!error) saveQueue([])
+  if (flushing) return
+  if (!navigator.onLine) return
+
+  const batch = getQueue()
+  if (batch.length === 0) return
+
+  flushing = true
+  cancelScheduledFlush()
+
+  // Clear the buffer up front so events tracked during the request aren't lost
+  saveQueue([])
+
+  try {
+    const { error } = await supabase.from('analytics_events').insert(batch)
+    if (error) {
+      // Put the batch back in front of whatever arrived meanwhile, retry later
+      saveQueue([...batch, ...getQueue()].slice(-MAX_QUEUE))
+      scheduleFlush()
+    }
+  } catch {
+    saveQueue([...batch, ...getQueue()].slice(-MAX_QUEUE))
+    scheduleFlush()
+  } finally {
+    flushing = false
+  }
 }
 
-// Flush queued events when connectivity is restored
 if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => { void flushQueue() })
+  // Flush queued events when connectivity is restored
+  window.addEventListener('online', () => {
+    void flushQueue()
+  })
+
+  // Flush when the visitor backgrounds or closes the tab. On mobile this is the
+  // only reliable "leaving" signal — 'beforeunload' does not fire on iOS Safari.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') void flushQueue()
+  })
+
+  // Send anything left over from a previous visit
+  void flushQueue()
 }
 
 // ─── Core function ────────────────────────────────────────────────────────────
@@ -99,15 +169,14 @@ export async function trackEvent(
     device_type: detectDeviceType(),
   }
 
-  if (!navigator.onLine) {
-    enqueue(event)
-    return
-  }
+  const queued = enqueue(event)
 
-  const { error } = await supabase.from('analytics_events').insert(event)
-  if (error) {
-    // Network failed despite onLine — queue for retry
-    enqueue(event)
+  if (!navigator.onLine) return
+
+  if (queued >= FLUSH_SIZE) {
+    await flushQueue()
+  } else {
+    scheduleFlush()
   }
 }
 
