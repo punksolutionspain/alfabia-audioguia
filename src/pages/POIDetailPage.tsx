@@ -124,9 +124,14 @@ export default function POIDetailPage() {
 
   useEffect(() => { void fetchData() }, [language])
 
-  // Current POI derived from the full list
+  // Current POI derived from the full list.
+  // The route accepts the UUID or the POI number: the illustrated map only
+  // knows the numbers drawn in its SVG and links to /poi/7.
   const current = useMemo(
-    () => allItems.find((item) => item.poi.id === id) ?? null,
+    () =>
+      allItems.find(
+        (item) => item.poi.id === id || String(item.poi.number) === id,
+      ) ?? null,
     [allItems, id],
   )
 
@@ -137,11 +142,11 @@ export default function POIDetailPage() {
     const sorted = [...allItems].sort(
       (a, b) => a.poi.sortOrder - b.poi.sortOrder,
     )
-    const currentIndex = sorted.findIndex((i) => i.poi.id === id)
+    const currentIndex = sorted.findIndex((i) => i.poi.id === current.poi.id)
     if (currentIndex === -1) return null
 
     return sorted[currentIndex + 1] ?? null
-  }, [allItems, id, current])
+  }, [allItems, current])
 
   const isClosing = current?.poi.number === 18
 
