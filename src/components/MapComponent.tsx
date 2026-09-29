@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { trackMapView } from '@/services/analyticsService'
+import { useT } from '@/i18n/translations'
 import mapaUrl from '@/assets/mapa.svg'
 import './MapComponent.css'
 
@@ -11,6 +12,7 @@ const CASA_POIS = ['10','11','12','13','14','15','16','17','18']
 
 export default function MapComponent() {
   const navigate = useNavigate()
+  const t = useT()
   const [view, setView] = useState<ViewMode>('exterior')
   const [rawSvg, setRawSvg] = useState<string>('')
 
@@ -64,13 +66,13 @@ export default function MapComponent() {
           onClick={() => setView('exterior')}
           className={`toggle-btn ${view === 'exterior' ? 'active' : ''}`}
         >
-          🌳 Jardines
+          🌳 {t('gardens')}
         </button>
         <button
           onClick={() => setView('interior')}
           className={`toggle-btn ${view === 'interior' ? 'active' : ''}`}
         >
-          🏠 Casa
+          🏠 {t('house')}
         </button>
       </div>
 
@@ -86,15 +88,15 @@ export default function MapComponent() {
       <div className="map-legend">
         <div className="legend-item">
           <span className="legend-color" style={{ backgroundColor: '#7BA66F' }} />
-          <span>Jardines</span>
+          <span>{t('gardens')}</span>
         </div>
         <div className="legend-item">
           <span className="legend-color" style={{ backgroundColor: '#D4B896' }} />
-          <span>Casa</span>
+          <span>{t('house')}</span>
         </div>
         <div className="legend-item">
           <span className="legend-color" style={{ backgroundColor: '#9B8F7E' }} />
-          <span>Dependencias</span>
+          <span>{t('outbuildings')}</span>
         </div>
       </div>
     </div>

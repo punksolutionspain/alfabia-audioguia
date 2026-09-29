@@ -9,6 +9,7 @@ import { trackMapView } from '@/services/analyticsService'
 import { useProgressStore } from '@/stores/useProgressStore'
 import { getAllPOIs } from '@/services/poiService'
 import MapComponent from '@/components/MapComponent'
+import { useT } from '@/i18n/translations'
 import type { POI } from '@/lib/types'
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl
@@ -109,6 +110,7 @@ function FitBounds({ pois }: { pois: POI[] }) {
 
 export default function MapPage() {
   const navigate = useNavigate()
+  const t = useT()
   const [mapMode, setMapMode] = useState<MapMode>('svg')
   const userPosition = useAppStore((s) => s.userPosition)
   const favorites = useProgressStore((s) => s.favorites)
@@ -154,7 +156,7 @@ export default function MapPage() {
         <button
           onClick={() => setMapMode('gps')}
           className="absolute top-4 left-4 z-[200] flex items-center gap-2 px-3 py-2 bg-white/90 backdrop-blur-sm border border-alfabia-border rounded-lg shadow-sm hover:bg-white transition-all"
-          title="Cambiar a mapa GPS"
+          title={t('switchToGps')}
         >
           <MapIcon className="w-4 h-4 text-alfabia-green" />
           <span className="text-xs font-medium text-alfabia-text">GPS</span>
@@ -167,7 +169,7 @@ export default function MapPage() {
     return (
       <div className="flex items-center justify-center gap-2 h-full text-alfabia-text-muted">
         <Loader2 className="w-5 h-5 animate-spin" />
-        <span className="text-sm">Cargando mapa…</span>
+        <span className="text-sm">{t('mapLoading')}</span>
       </div>
     )
   }
@@ -176,13 +178,13 @@ export default function MapPage() {
     return (
       <div className="flex flex-col items-center gap-3 px-8 py-20 text-center">
         <AlertCircle className="w-8 h-8 text-rose-400" />
-        <p className="text-sm text-alfabia-text-muted">No se pudo cargar el mapa.</p>
+        <p className="text-sm text-alfabia-text-muted">{t('mapError')}</p>
         <button
           type="button"
           onClick={() => void fetchPOIs()}
           className="text-sm font-medium text-alfabia-green underline underline-offset-2"
         >
-          Reintentar
+          {t('retry')}
         </button>
       </div>
     )
@@ -245,18 +247,18 @@ export default function MapPage() {
       <button
         onClick={() => setMapMode('svg')}
         className="absolute top-4 left-4 z-[500] flex items-center gap-2 px-3 py-2 bg-white/90 backdrop-blur-sm border border-alfabia-border rounded-lg shadow-sm hover:bg-white transition-all"
-        title="Cambiar a mapa interactivo"
+        title={t('switchToPlan')}
       >
         <MapIcon className="w-4 h-4 text-alfabia-green" />
-        <span className="text-xs font-medium text-alfabia-text">Mapa</span>
+        <span className="text-xs font-medium text-alfabia-text">{t('map')}</span>
       </button>
 
       <div className="absolute bottom-20 right-3 z-[500] flex flex-col gap-1.5 bg-white/90 backdrop-blur-sm border border-alfabia-border rounded-xl px-3 py-2.5 shadow-sm pointer-events-none">
         {(
           [
-            ['default',  'No visitado'],
-            ['listened', 'Escuchado'],
-            ['favorite', 'Favorito'],
+            ['default',  t('unvisited')],
+            ['listened', t('listenedLabel')],
+            ['favorite', t('favorite')],
           ] as [PinState, string][]
         ).map(([state, label]) => (
           <div key={state} className="flex items-center gap-2">

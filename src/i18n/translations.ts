@@ -46,6 +46,12 @@ export interface Translations {
   unvisited: string
   listenedLabel: string
   favorite: string
+  mapError: string
+  switchToGps: string
+  switchToPlan: string
+  gardens: string
+  house: string
+  outbuildings: string
 }
 
 const translations: Record<Language, Translations> = {
@@ -86,6 +92,12 @@ const translations: Record<Language, Translations> = {
     unvisited: 'No visitado',
     listenedLabel: 'Escuchado',
     favorite: 'Favorito',
+    mapError: 'No se pudo cargar el mapa.',
+    switchToGps: 'Cambiar a mapa GPS',
+    switchToPlan: 'Cambiar a mapa interactivo',
+    gardens: 'Jardines',
+    house: 'Casa',
+    outbuildings: 'Dependencias',
   },
   en: {
     home: 'Home',
@@ -124,6 +136,12 @@ const translations: Record<Language, Translations> = {
     unvisited: 'Unvisited',
     listenedLabel: 'Listened',
     favorite: 'Favourite',
+    mapError: 'Could not load the map.',
+    switchToGps: 'Switch to GPS map',
+    switchToPlan: 'Switch to interactive map',
+    gardens: 'Gardens',
+    house: 'House',
+    outbuildings: 'Estate',
   },
   de: {
     home: 'Startseite',
@@ -162,6 +180,12 @@ const translations: Record<Language, Translations> = {
     unvisited: 'Nicht besucht',
     listenedLabel: 'Gehört',
     favorite: 'Favorit',
+    mapError: 'Karte konnte nicht geladen werden.',
+    switchToGps: 'Zur GPS-Karte wechseln',
+    switchToPlan: 'Zur interaktiven Karte wechseln',
+    gardens: 'Gärten',
+    house: 'Haus',
+    outbuildings: 'Nebengebäude',
   },
   fr: {
     home: 'Accueil',
@@ -200,6 +224,12 @@ const translations: Record<Language, Translations> = {
     unvisited: 'Non visité',
     listenedLabel: 'Écouté',
     favorite: 'Favori',
+    mapError: 'Impossible de charger la carte.',
+    switchToGps: 'Passer à la carte GPS',
+    switchToPlan: 'Passer à la carte interactive',
+    gardens: 'Jardins',
+    house: 'Maison',
+    outbuildings: 'Dépendances',
   },
   ca: {
     home: 'Inici',
@@ -238,6 +268,12 @@ const translations: Record<Language, Translations> = {
     unvisited: 'No visitat',
     listenedLabel: 'Escoltat',
     favorite: 'Preferit',
+    mapError: "No s'ha pogut carregar el mapa.",
+    switchToGps: 'Canviar a mapa GPS',
+    switchToPlan: 'Canviar a mapa interactiu',
+    gardens: 'Jardins',
+    house: 'Casa',
+    outbuildings: 'Dependències',
   },
 }
 
