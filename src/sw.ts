@@ -31,7 +31,10 @@ const CACHE_NAMES = {
   supabaseData: `supabase-data-${CACHE_VERSION}`,
   audioFiles:   `audio-files-${CACHE_VERSION}`,
   staticAssets: `static-assets-${CACHE_VERSION}`,
-  osmTiles:     'osm-tiles-v2',
+  // v3: bumped together with the CSP fix in vercel.json (connect-src now allows
+  // OSM). An installed worker keeps the CSP it was installed with until its
+  // script bytes change, so a header-only deploy would not reach returning visitors.
+  osmTiles:     'osm-tiles-v3',
 }
 
 // ─── App shell precache ───────────────────────────────────────────────────────
