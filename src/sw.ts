@@ -12,6 +12,8 @@ import {
   StaleWhileRevalidate,
 } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
+import { CacheableResponsePlugin } from 'workbox-cacheable-response'
+import { RangeRequestsPlugin } from 'workbox-range-requests'
 
 // __WB_MANIFEST is injected by vite-plugin-pwa at build time.
 // It MUST be accessed as `self.__WB_MANIFEST` so workbox-build can locate and
@@ -66,6 +68,9 @@ self.addEventListener('activate', (event) => {
 // 1. Supabase Storage (audio / image files) — CacheFirst
 //    Files are pre-populated by the manual offline download flow.
 //    When they're in the cache, serve instantly; when not, fetch and cache.
+//    <audio> asks for byte ranges and Safari requires a 206 answer, so the
+//    cached full file is sliced into the requested range. Only full 200
+//    responses are stored — a partial 206 must never end up in the cache.
 registerRoute(
   ({ url }) =>
     url.hostname.endsWith('.supabase.co') &&
@@ -73,6 +78,8 @@ registerRoute(
   new CacheFirst({
     cacheName: CACHE_NAMES.audioFiles,
     plugins: [
+      new CacheableResponsePlugin({ statuses: [200] }),
+      new RangeRequestsPlugin(),
       new ExpirationPlugin({
         maxEntries: 120,          // 18 POIs × ~5 files each + headroom
         maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days

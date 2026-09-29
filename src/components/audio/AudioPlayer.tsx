@@ -1,6 +1,19 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { Play, Pause, Heart, Loader2, AlertCircle } from 'lucide-react'
+import { useAppStore } from '@/stores/useAppStore'
 import { useProgressStore } from '@/stores/useProgressStore'
+import { pickAudioUrl } from '@/lib/audioFormat'
+import type { Language } from '@/lib/types'
+
+// ─── i18n ─────────────────────────────────────────────────────────────────────
+
+const COPY = {
+  es: { unavailable: 'Audio no disponible', loadError: 'Error al cargar' },
+  en: { unavailable: 'Audio not available', loadError: 'Failed to load' },
+  de: { unavailable: 'Audio nicht verfügbar', loadError: 'Ladefehler' },
+  ca: { unavailable: 'Àudio no disponible', loadError: 'Error en carregar' },
+  fr: { unavailable: 'Audio non disponible', loadError: 'Erreur de chargement' },
+} satisfies Record<Language, Record<string, string>>
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -9,15 +22,6 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
-}
-
-/** One-time detection — cached at module level to avoid repeated DOM creation */
-let _oggSupported: boolean | null = null
-function supportsOgg(): boolean {
-  if (_oggSupported !== null) return _oggSupported
-  const audio = document.createElement('audio')
-  _oggSupported = audio.canPlayType('audio/ogg; codecs=opus') !== ''
-  return _oggSupported
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -42,6 +46,7 @@ export default function AudioPlayer({
   const markAsListened = useProgressStore((s) => s.markAsListened)
   const isFavorite = useProgressStore((s) => s.isFavorite)
   const toggleFavorite = useProgressStore((s) => s.toggleFavorite)
+  const copy = COPY[useAppStore((s) => s.language)]
 
   const audioRef = useRef<HTMLAudioElement>(null)
 
@@ -52,10 +57,10 @@ export default function AudioPlayer({
   const [hasError, setHasError] = useState(false)
 
   // Resolve the best audio source once per render
-  const audioSrc = useMemo(() => {
-    if (supportsOgg() && audioUrlOgg) return audioUrlOgg
-    return audioUrlMp3
-  }, [audioUrlOgg, audioUrlMp3])
+  const audioSrc = useMemo(
+    () => pickAudioUrl({ audioUrlOgg, audioUrlMp3 }),
+    [audioUrlOgg, audioUrlMp3],
+  )
 
   // Wire all audio events
   useEffect(() => {
@@ -156,7 +161,7 @@ export default function AudioPlayer({
       {!audioSrc && (
         <div className="flex items-center justify-center gap-2 py-2 text-sm text-alfabia-text-muted">
           <AlertCircle className="w-4 h-4 shrink-0" />
-          Audio no disponible
+          {copy.unavailable}
         </div>
       )}
 
@@ -211,7 +216,7 @@ export default function AudioPlayer({
                 {hasError ? (
                   <span className="flex items-center gap-1 text-xs text-rose-500">
                     <AlertCircle className="w-3 h-3" />
-                    Error al cargar
+                    {copy.loadError}
                   </span>
                 ) : (
                   <span className="text-xs tabular-nums text-alfabia-text-muted">

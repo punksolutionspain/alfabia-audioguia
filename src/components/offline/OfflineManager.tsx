@@ -9,6 +9,7 @@ import {
   type AudioItem,
 } from '@/services/audioService'
 import { trackOfflineDownload } from '@/services/analyticsService'
+import { pickAudioUrl } from '@/lib/audioFormat'
 import DownloadProgress from './DownloadProgress'
 import StorageQuota from './StorageQuota'
 
@@ -98,9 +99,9 @@ export default function OfflineManager({ language, items }: OfflineManagerProps)
     return () => { abortRef.current?.abort() }
   }, [])
 
-  // Build the list of audio items to download (OGG preferred, MP3 fallback)
+  // Build the list of audio items to download (same format the player will request)
   const audioItems: AudioItem[] = items.flatMap(({ poi, translation }) => {
-    const url = translation.audioUrlOgg ?? translation.audioUrlMp3
+    const url = pickAudioUrl(translation)
     if (!url) return []
     return [{ poiId: poi.id, audioUrl: url }]
   })

@@ -5,6 +5,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import { useOfflineStore } from '@/stores/useOfflineStore'
 import { getPOIsWithTranslations } from '@/services/poiService'
 import { downloadAudiosParallel, areAllAudiosCached, type AudioItem } from '@/services/audioService'
+import { pickAudioUrl } from '@/lib/audioFormat'
 import type { Language } from '@/lib/types'
 
 // ─── i18n ─────────────────────────────────────────────────────────────────────
@@ -98,7 +99,7 @@ export default function LoadingPage() {
         // Fetch POI list to know which audio URLs to cache
         const items = await getPOIsWithTranslations(lang)
         const audioItems: AudioItem[] = items.flatMap(({ poi, translation }) => {
-          const url = translation.audioUrlOgg ?? translation.audioUrlMp3
+          const url = pickAudioUrl(translation)
           if (!url) return []
           return [{ poiId: poi.id, audioUrl: url }]
         })
