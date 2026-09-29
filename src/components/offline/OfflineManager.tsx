@@ -123,7 +123,6 @@ export default function OfflineManager({ language, items }: OfflineManagerProps)
 
     try {
       await downloadAudiosForLanguage(
-        language,
         audioItems,
         {
           onProgress: (downloaded, total, poiId) => {
@@ -148,7 +147,7 @@ export default function OfflineManager({ language, items }: OfflineManagerProps)
 
   async function handleClearCache() {
     abortRef.current?.abort()
-    await clearAudioCache(language)
+    await clearAudioCache()
     clearCachedAudios()
 
     // Refresh space estimate after clearing

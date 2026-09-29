@@ -14,6 +14,7 @@ import {
 import { ExpirationPlugin } from 'workbox-expiration'
 import { CacheableResponsePlugin } from 'workbox-cacheable-response'
 import { RangeRequestsPlugin } from 'workbox-range-requests'
+import { AUDIO_CACHE_NAME, CACHE_VERSION } from './lib/cacheNames'
 
 // __WB_MANIFEST is injected by vite-plugin-pwa at build time.
 // It MUST be accessed as `self.__WB_MANIFEST` so workbox-build can locate and
@@ -22,14 +23,12 @@ declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<PrecacheEntry | string>
 }
 
-// ─── Cache versioning ─────────────────────────────────────────────────────────
-// Increment on every deploy. Old runtime caches are purged in the activate event.
-
-const CACHE_VERSION = 'v1'
+// ─── Cache names ──────────────────────────────────────────────────────────────
+// CACHE_VERSION lives in lib/cacheNames because the page shares the audio cache.
 
 const CACHE_NAMES = {
   supabaseData: `supabase-data-${CACHE_VERSION}`,
-  audioFiles:   `audio-files-${CACHE_VERSION}`,
+  audioFiles:   AUDIO_CACHE_NAME,
   staticAssets: `static-assets-${CACHE_VERSION}`,
   // v3: bumped together with the CSP fix in vercel.json (connect-src now allows
   // OSM). An installed worker keeps the CSP it was installed with until its
@@ -51,6 +50,8 @@ self.skipWaiting()
 clientsClaim()
 
 // ─── Purge stale runtime caches on activate ───────────────────────────────────
+// This also removes the per-language `alfabia-audio-v1-*` caches the page used
+// to keep: they duplicated every audio already stored in the audio cache.
 
 self.addEventListener('activate', (event) => {
   const validCacheSet = new Set(Object.values(CACHE_NAMES))

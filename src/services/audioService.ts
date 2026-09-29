@@ -1,8 +1,7 @@
-import type { Language } from '@/lib/types'
+import { AUDIO_CACHE_NAME } from '@/lib/cacheNames'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const AUDIO_CACHE_PREFIX = 'alfabia-audio-v1'
 const FETCH_TIMEOUT_MS = 30_000
 export const LOW_SPACE_THRESHOLD_BYTES = 50 * 1024 * 1024 // 50 MB
 
@@ -20,12 +19,16 @@ export interface DownloadCallbacks {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function audioCacheName(language: Language): string {
-  return `${AUDIO_CACHE_PREFIX}-${language}`
-}
-
 function cacheAvailable(): boolean {
   return typeof caches !== 'undefined'
+}
+
+// Downloads go into the cache the service worker plays from, so each audio is
+// stored once. When the worker already controls the page it stores the file on
+// its own as the fetch passes through it; writing it here too just overwrites
+// the same entry, and covers a first visit where the worker is not in control yet.
+function openAudioCache(): Promise<Cache> {
+  return caches.open(AUDIO_CACHE_NAME)
 }
 
 // ─── Download ─────────────────────────────────────────────────────────────────
@@ -36,7 +39,6 @@ function cacheAvailable(): boolean {
  * Throws DOMException('AbortError') if the signal fires.
  */
 export async function downloadAudiosForLanguage(
-  language: Language,
   items: AudioItem[],
   callbacks: DownloadCallbacks,
   signal?: AbortSignal,
@@ -45,7 +47,7 @@ export async function downloadAudiosForLanguage(
     throw new Error('Cache API is not available in this browser context')
   }
 
-  const cache = await caches.open(audioCacheName(language))
+  const cache = await openAudioCache()
 
   for (let i = 0; i < items.length; i++) {
     if (signal?.aborted) throw new DOMException('Download cancelled', 'AbortError')
@@ -95,7 +97,6 @@ export async function downloadAudiosForLanguage(
  * always completes.
  */
 export async function downloadAudiosParallel(
-  language: Language,
   items: AudioItem[],
   callbacks: DownloadCallbacks,
   signal?: AbortSignal,
@@ -104,7 +105,7 @@ export async function downloadAudiosParallel(
 ): Promise<void> {
   if (!cacheAvailable()) return
 
-  const cache = await caches.open(audioCacheName(language))
+  const cache = await openAudioCache()
   const total = items.length
   let completed = 0
 
@@ -174,15 +175,12 @@ export async function downloadAudiosParallel(
 // ─── All cached check ─────────────────────────────────────────────────────────
 
 /**
- * Returns true if all provided audio URLs are already in the cache for this
- * language. Fast-path check for returning visitors.
+ * Returns true if all provided audio URLs are already in the cache.
+ * Fast-path check for returning visitors.
  */
-export async function areAllAudiosCached(
-  language: Language,
-  items: AudioItem[],
-): Promise<boolean> {
+export async function areAllAudiosCached(items: AudioItem[]): Promise<boolean> {
   if (!cacheAvailable() || items.length === 0) return false
-  const cache = await caches.open(audioCacheName(language))
+  const cache = await openAudioCache()
   const hits = await Promise.all(items.map((item) => cache.match(item.audioUrl).then(Boolean)))
   return hits.every(Boolean)
 }
@@ -190,21 +188,12 @@ export async function areAllAudiosCached(
 // ─── Clear ────────────────────────────────────────────────────────────────────
 
 /**
- * Remove audio cache for a specific language, or all languages if omitted.
+ * Remove every downloaded audio, in all languages.
  * Does NOT touch useProgressStore (listened / favorites).
  */
-export async function clearAudioCache(language?: Language): Promise<void> {
+export async function clearAudioCache(): Promise<void> {
   if (!cacheAvailable()) return
-
-  if (language) {
-    await caches.delete(audioCacheName(language))
-    return
-  }
-
-  const keys = await caches.keys()
-  await Promise.all(
-    keys.filter((k) => k.startsWith(AUDIO_CACHE_PREFIX)).map((k) => caches.delete(k)),
-  )
+  await caches.delete(AUDIO_CACHE_NAME)
 }
 
 // ─── Storage estimate ─────────────────────────────────────────────────────────

@@ -68,8 +68,6 @@ export default function LoadingPage() {
   const appLang   = useAppStore((s) => s.language)
 
   const {
-    cachedAudios,
-    cachedLanguage,
     addCachedAudio,
     setCachedLanguage,
     setDownloadState,
@@ -106,14 +104,9 @@ export default function LoadingPage() {
 
         setTotal(audioItems.length)
 
-        // Fast-path: store says all cached for this language
-        const storeComplete =
-          cachedLanguage === lang && cachedAudios.length >= audioItems.length
-
-        // Double-check with Cache API for accuracy
-        const allCached = storeComplete
-          ? true
-          : await areAllAudiosCached(lang, audioItems)
+        // The cache is the source of truth. The store only counts POIs, so it
+        // cannot tell whether the files are still there or in which format.
+        const allCached = await areAllAudiosCached(audioItems)
 
         console.log('Cache check result:', allCached)
 
@@ -128,7 +121,6 @@ export default function LoadingPage() {
 
         // Download with max 3 concurrent, 2 retries each
         await downloadAudiosParallel(
-          lang,
           audioItems,
           {
             onProgress: (downloaded, t, poiId) => {
