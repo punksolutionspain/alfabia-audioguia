@@ -1,6 +1,6 @@
 # Vigilante de la audioguía
 
-Un script que comprueba desde fuera, cada 10 minutos, que la audioguía **funciona**, no solo que responde, y avisa por WhatsApp cuando algo falla y cuando se resuelve.
+Un script que comprueba desde fuera, tres veces al día, que la audioguía **funciona**, no solo que responde, y avisa por WhatsApp cuando algo falla y cuando se resuelve.
 
 - Script: [`scripts/watchdog.mjs`](../scripts/watchdog.mjs) (Node 20+, sin dependencias).
 - Programación: [`.github/workflows/watchdog.yml`](../.github/workflows/watchdog.yml) (GitHub Actions).
@@ -8,7 +8,13 @@ Un script que comprueba desde fuera, cada 10 minutos, que la audioguía **funcio
 
 Se ejecuta en GitHub y no en Vercel a propósito: un vigilante tiene que vivir fuera de lo que vigila.
 
-## Temporada
+## Cuándo se ejecuta
+
+**Tres veces al día: 10:27, 13:27 y 16:27**, dentro del horario de apertura.
+
+GitHub programa en hora UTC, así que mientras rige el horario de invierno (hasta finales de marzo y la última semana de octubre) las pasadas son una hora antes: 9:27, 12:27 y 15:27. Para cambiar las horas se edita la línea `cron` del flujo de trabajo.
+
+### Temporada
 
 Solo trabaja mientras los jardines están abiertos: **del 14 de febrero al 31 de octubre**, ambos incluidos, en hora de Madrid. Fuera de esas fechas no comprueba ni avisa de nada.
 
@@ -23,25 +29,25 @@ De noviembre a enero queda una ejecución diaria que no comprueba nada. Existe p
 | `web` | crítico | La página principal, el programa de la app, el service worker o el manifiesto no cargan |
 | `datos` | crítico | No hay 18 puntos, o a algún idioma le falta una traducción o un audio en OGG o en MP3 |
 | `audios` | crítico | Algún archivo de audio no se puede descargar |
-| `actividad` | crítico | Ninguna visita en 45 minutos, cuando en esa misma franja hubo al menos 5 en cada una de las dos semanas anteriores |
+| `actividad` | aviso | No hay ninguna visita en todo el día, cuando a esa misma hora había al menos 5 en cada una de las dos semanas anteriores |
 | `lentitud` | aviso | La base de datos tarda más de 4 segundos dos veces seguidas |
 | `mapas` | aviso | La política de seguridad deja de permitir OpenStreetMap, o OpenStreetMap no responde |
 
 Detalles que conviene saber:
 
-- **Audios:** hay 180 archivos (18 puntos × 5 idiomas × 2 formatos). Cada pasada revisa 6 y va rotando, así que los recorre todos en 5 horas. Revisarlos de golpe hace que Supabase responda con error 429.
-- **Actividad:** se compara con las dos semanas anteriores para no dar falsas alarmas de noche, en días flojos ni al empezar la temporada. Puede dar una falsa alarma si los jardines cierran un día en que las dos semanas anteriores abrieron.
+- **Audios:** hay 180 archivos (18 puntos × 5 idiomas × 2 formatos). Cada pasada revisa 60, así que entre las tres del día los recorre todos. Se piden de uno en uno porque Supabase responde con error 429 a las ráfagas.
+- **Actividad:** cuenta las visitas desde medianoche, no las de la última hora. Los jardines cierran antes algunos días, sobre todo cuando hay un evento privado, y una tarde vacía tras una mañana normal no debe avisar de nada: basta una visita en el día para darla por buena. Es solo un aviso porque, con todo lo demás en verde, un día sin visitas suele ser un día de cierre.
 - **Confirmación:** si algo falla, se repite la comprobación a los 20 segundos antes de avisar.
 
 ## Cuándo avisa
 
 - Cuando algo **empieza a fallar**.
-- Cada **2 horas** mientras siga fallando.
+- En **cada pasada posterior** mientras siga fallando, si es crítico. Los avisos se dicen una sola vez.
 - Cuando **se resuelve**, indicando cuánto ha durado.
 
-No avisa cada 10 minutos: recuerda qué fallaba en la pasada anterior.
-
 Además, si falla algo crítico la ejecución queda en rojo y GitHub envía su propio correo al dueño del repositorio. Es un segundo canal por si falla el webhook.
+
+Con tres pasadas al día, una avería puede tardar hasta tres horas en detectarse, y una que empiece después de las 16:27 no se verá hasta la mañana siguiente.
 
 ## Qué envía al webhook
 
@@ -53,10 +59,10 @@ Un `POST` con este JSON:
   "status": "alerta",
   "level": "critico",
   "subject": "🔴 Audioguía Alfabia: Hay audios que no se descargan",
-  "body": "🔴 Audioguía Alfabia: Hay audios que no se descargan — 5/10, 11:00\n• Fallan poi_07_en.mp3 (HTTP 400).\nhttps://github.com/…/actions/runs/…",
-  "whatsapp_line": "🔴 Audioguía Alfabia: Hay audios que no se descargan — 5/10, 11:00. Fallan poi_07_en.mp3 (HTTP 400).",
+  "body": "🔴 Audioguía Alfabia: Hay audios que no se descargan — 5/10, 13:27\n• Fallan poi_07_en.mp3 (HTTP 400).\nhttps://github.com/…/actions/runs/…",
+  "whatsapp_line": "🔴 Audioguía Alfabia: Hay audios que no se descargan — 5/10, 13:27. Fallan poi_07_en.mp3 (HTTP 400).",
   "checks": [{ "id": "audios", "level": "critico", "title": "…", "detail": "…" }],
-  "at": "2026-10-05T09:00:00.000Z",
+  "at": "2026-10-05T11:27:00.000Z",
   "run_url": "https://github.com/…/actions/runs/…"
 }
 ```

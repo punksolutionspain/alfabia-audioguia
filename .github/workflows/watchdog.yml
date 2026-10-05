@@ -4,9 +4,12 @@ name: Vigilante de la audioguía
 
 on:
   schedule:
-    # Cada 10 minutos de febrero a octubre. El script afina las fechas exactas
-    # de temporada (14 de febrero – 31 de octubre) y no hace nada fuera de ellas.
-    - cron: '*/10 * * 2-10 *'
+    # Tres veces al día de febrero a octubre: 10:27, 13:27 y 16:27 en horario de
+    # verano. GitHub programa en UTC, así que con el horario de invierno (hasta
+    # finales de marzo y la última semana de octubre) son una hora antes.
+    # El script afina las fechas exactas de temporada (14 de febrero – 31 de
+    # octubre) y no hace nada fuera de ellas.
+    - cron: '27 8,11,14 * 2-10 *'
     # Una vez al día de noviembre a enero: no comprueba nada, solo evita que
     # GitHub desactive la tarea programada por inactividad del repositorio.
     - cron: '23 6 * 11,12,1 *'
@@ -38,8 +41,8 @@ jobs:
           node-version: 22
 
       # El estado (qué falla y desde cuándo) viaja de una ejecución a la
-      # siguiente en la caché: así se avisa al empezar y al resolverse, no
-      # cada 10 minutos.
+      # siguiente en la caché: así se sabe si un fallo es nuevo, si continúa
+      # o si se ha resuelto.
       - name: Recuperar el estado anterior
         uses: actions/cache/restore@v4
         with:

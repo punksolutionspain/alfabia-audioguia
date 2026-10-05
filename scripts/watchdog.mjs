@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Watchdog for the Alfabia audioguide. See docs/vigilante.md (Spanish).
 //
-// Runs from outside the app (GitHub Actions, every 10 minutes) and checks that
-// the guide actually works, not just that the site answers: the POIs and both
-// audio formats exist, audio files download, and real visitors are showing up.
+// Runs from outside the app (GitHub Actions, three times a day while the
+// gardens are open) and checks that the guide actually works, not just that the
+// site answers: the POIs and both audio formats exist, audio files download,
+// and visitors have shown up today.
 // Alerts go to a webhook (Make → WhatsApp). No dependencies: Node 20+ only.
 //
 // Alert texts are in Spanish on purpose — they are read by the team.
@@ -42,13 +43,12 @@ const LANGUAGES = ['es', 'en', 'de', 'fr', 'ca']
 const EXPECTED_POIS = 18
 const TIMEOUT_MS = 15_000
 const SLOW_MS = 4_000                 // Supabase normally answers in ~0.3 s
-const AUDIO_SAMPLE = 6                // files checked per run; all 180 rotate in 5 h
+const AUDIO_SAMPLE = 60               // files checked per run: all 180 in the 3 daily runs
 const AUDIO_PAUSE_MS = 300            // Storage answers 429 to bursts
-const ACTIVITY_WINDOW_MIN = 45
-const ACTIVITY_MIN_BASELINE = 5       // sessions the same slot needed in past weeks
-const REMIND_EVERY_MIN = 120
+const ACTIVITY_MIN_BASELINE = 5       // visits by this time of day needed in past weeks
+const REMIND_EVERY_MIN = 120          // shorter than the gap between runs: remind on each
 const RECHECK_AFTER_MS = 20_000
-const SLOT_MS = 10 * 60 * 1000        // matches the cron cadence
+const SLOT_MS = 3 * 60 * 60 * 1000    // matches the cron cadence (08:27, 11:27, 14:27 UTC)
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -137,6 +137,16 @@ export function seasonInfo(now) {
   const firstDay = Date.UTC(year, SEASON.opens.month - 1, SEASON.opens.day)
   const dayOfSeason = Math.round((Date.UTC(year, month - 1, day) - firstDay) / 86_400_000) + 1
   return { open, dayOfSeason }
+}
+
+const madridTime = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Madrid', hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit',
+})
+
+/** The instant the day `now` falls in started in Madrid (00:00 local time). */
+export function madridMidnight(now) {
+  const [hours, minutes, seconds] = madridTime.format(now).split(':').map(Number)
+  return now - ((hours * 60 + minutes) * 60 + seconds) * 1000 - (now % 1000)
 }
 
 function duration(fromIso, now) {
@@ -249,29 +259,33 @@ export function judgeActivity(current, weekAgo, twoWeeksAgo) {
 export async function checkActivity(config, ctx) {
   if (ctx.supabaseDown) return { skipped: true, detail: 'la base de datos no responde' }
 
+  // Visits since midnight, not in the last hour: the gardens sometimes close
+  // early for a private event, and an empty afternoon after a normal morning
+  // must not raise anything. One visit today is enough to pass.
   const week = 7 * 24 * 60 * 60 * 1000
-  const windowMs = ACTIVITY_WINDOW_MIN * 60 * 1000
-  const sessionsBefore = (end) =>
+  const visitsUntil = (end) =>
     countRows(
       config,
       'event_type=eq.session_start' +
-        `&created_at=gte.${new Date(end - windowMs).toISOString()}` +
+        `&created_at=gte.${new Date(madridMidnight(end)).toISOString()}` +
         `&created_at=lt.${new Date(end).toISOString()}`,
     )
 
-  const current = await sessionsBefore(ctx.now)
-  const weekAgo = await sessionsBefore(ctx.now - week)
-  const twoWeeksAgo = await sessionsBefore(ctx.now - 2 * week)
+  const current = await visitsUntil(ctx.now)
+  const weekAgo = await visitsUntil(ctx.now - week)
+  const twoWeeksAgo = await visitsUntil(ctx.now - 2 * week)
   if (current === null || weekAgo === null || twoWeeksAgo === null) {
     return { skipped: true, detail: 'no se pudo consultar el analytics' }
   }
 
-  const span = `${clock.format(ctx.now - windowMs)}–${clock.format(ctx.now)}`
+  const hour = clock.format(ctx.now)
 
   if (judgeActivity(current, weekAgo, twoWeeksAgo)) {
     return {
       ok: false,
-      detail: `0 visitas entre ${span}; en esa franja hubo ${weekAgo} y ${twoWeeksAgo} las dos semanas anteriores`,
+      detail:
+        `ninguna visita hoy hasta las ${hour}; a esta hora había ${weekAgo} y ${twoWeeksAgo} ` +
+        'las dos semanas anteriores. Si los jardines están cerrados, es normal',
     }
   }
 
@@ -294,7 +308,7 @@ export async function checkActivity(config, ctx) {
     }
   }
 
-  return { ok: true, detail: `${current} visitas entre ${span} (semanas anteriores: ${weekAgo} y ${twoWeeksAgo})` }
+  return { ok: true, detail: `${current} visitas hoy hasta las ${hour} (semanas anteriores: ${weekAgo} y ${twoWeeksAgo})` }
 }
 
 export async function checkSpeed(config, ctx) {
@@ -315,9 +329,7 @@ export async function checkMaps(config, ctx) {
     return { ok: false, detail: 'la política de seguridad ya no permite los mapas de OpenStreetMap' }
   }
 
-  // OpenStreetMap asks for light automated use: one tile, once an hour
-  if (Math.floor(ctx.startedAt / SLOT_MS) % 6 !== 0) return { ok: true, detail: 'política correcta' }
-
+  // OpenStreetMap asks for light automated use: a single tile per run
   const tile = await http('https://a.tile.openstreetmap.org/17/66516/49755.png', {
     headers: { 'User-Agent': 'alfabia-audioguia-watchdog', Referer: `${config.site}/` },
   })
@@ -331,7 +343,8 @@ export const CHECKS = [
   { id: 'web',       level: 'critico', title: 'La web no carga',                       run: checkWeb },
   { id: 'datos',     level: 'critico', title: 'Faltan puntos o audios',                run: checkData },
   { id: 'audios',    level: 'critico', title: 'Hay audios que no se descargan',        run: checkAudio },
-  { id: 'actividad', level: 'critico', title: 'Ningún visitante en 45 minutos',        run: checkActivity },
+  // Only a notice: with every other check green, an empty day is usually a closed day
+  { id: 'actividad', level: 'aviso',   title: 'Hoy no hay visitas registradas',        run: checkActivity },
   { id: 'lentitud',  level: 'aviso',   title: 'La base de datos responde lenta',       run: checkSpeed },
   { id: 'mapas',     level: 'aviso',   title: 'Los mapas pueden no verse',             run: checkMaps },
 ]
@@ -384,8 +397,9 @@ async function writeState(file, state) {
 
 /**
  * Compare this run with the previous state.
- * Notify when something starts failing, every REMIND_EVERY_MIN while it lasts,
- * and when it recovers. A skipped check is neither a failure nor a recovery.
+ * Notify when something starts failing and when it recovers. Critical failures
+ * are also repeated on every later run while they last; notices are said once.
+ * A skipped check is neither a failure nor a recovery.
  */
 export function decide(previous, results, now, checks = CHECKS) {
   const failing = {}
@@ -415,7 +429,12 @@ export function decide(previous, results, now, checks = CHECKS) {
     }
     failing[check.id] = entry
     if (!before) fresh.push(check.id)
-    else if (now - new Date(before.lastNotified ?? 0) >= REMIND_EVERY_MIN * 60_000) reminderDue = true
+    else if (
+      entry.level === 'critico' &&
+      now - new Date(before.lastNotified ?? 0) >= REMIND_EVERY_MIN * 60_000
+    ) {
+      reminderDue = true
+    }
   }
 
   const stillFailing = Object.keys(failing).length > 0
