@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Tailwind looks for class names in every file of the repository, not just in
+   src/: the word "contents" in a workflow file became a CSS rule and changed
+   the production bundle. Keep folders that are not part of the app out. */
+@source not "../.github";
+@source not "../docs";
+@source not "../scripts";
+
 /* ─────────────────────────────────────────────
    Teodor web font (display/headings only)
 ───────────────────────────────────────────── */
