@@ -68,8 +68,10 @@ jobs:
 
       # En repositorios públicos GitHub apaga las tareas programadas tras 60
       # días sin commits. Reactivar la tarea reinicia ese contador.
+      # Si este paso falla no debe poner en rojo una comprobación correcta.
       - name: Mantener activa la tarea programada
-        if: always() && github.event_name == 'schedule'
+        if: always()
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/watchdog.yml/enable"
