@@ -1,0 +1,72 @@
+name: Vigilante de la audioguía
+
+# Qué comprueba y cómo se configura: docs/vigilante.md
+
+on:
+  schedule:
+    # Cada 10 minutos de febrero a octubre. El script afina las fechas exactas
+    # de temporada (14 de febrero – 31 de octubre) y no hace nada fuera de ellas.
+    - cron: '*/10 * * 2-10 *'
+    # Una vez al día de noviembre a enero: no comprueba nada, solo evita que
+    # GitHub desactive la tarea programada por inactividad del repositorio.
+    - cron: '23 6 * 11,12,1 *'
+  workflow_dispatch:
+    inputs:
+      simular_fallo:
+        description: 'Simular un fallo para probar el aviso: web, datos, audios, actividad, lentitud o mapas'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  actions: write
+
+# Dos ejecuciones a la vez leerían el mismo estado y avisarían por duplicado
+concurrency:
+  group: vigilante
+  cancel-in-progress: false
+
+jobs:
+  vigilar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # El estado (qué falla y desde cuándo) viaja de una ejecución a la
+      # siguiente en la caché: así se avisa al empezar y al resolverse, no
+      # cada 10 minutos.
+      - name: Recuperar el estado anterior
+        uses: actions/cache/restore@v4
+        with:
+          path: .watchdog
+          key: vigilante-estado-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: vigilante-estado-
+
+      - name: Comprobar la audioguía
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          WATCHDOG_SKIP: ${{ vars.WATCHDOG_SKIP }}
+          WATCHDOG_FORCE_FAIL: ${{ inputs.simular_fallo }}
+        run: node scripts/watchdog.mjs
+
+      - name: Guardar el estado
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .watchdog
+          key: vigilante-estado-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # En repositorios públicos GitHub apaga las tareas programadas tras 60
+      # días sin commits. Reactivar la tarea reinicia ese contador.
+      - name: Mantener activa la tarea programada
+        if: always() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/watchdog.yml/enable"
