@@ -5,7 +5,7 @@ import type { Language } from '@/lib/types'
 
 const MSGS: Record<Language, { title: string; body: string; thanks: string }> = {
   es: {
-    title:  'Temporada finalizada',
+    title:  'Hasta el próximo año',
     body:   'La audioguía descansa durante el invierno. Los Jardines de Alfabia reabren sus puertas en marzo de 2027.',
     thanks: 'Gracias por vuestra visita. ¡Hasta la próxima temporada!',
   },
