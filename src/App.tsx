@@ -6,6 +6,7 @@ import { LanguageProvider, useLanguage } from '@/contexts/LanguageContext'
 // ─── Lazy-loaded pages (one chunk per route) ──────────────────────────────────
 // Only AppShell + the two guards are loaded upfront. Everything else is split.
 
+const SeasonClosedPage = lazy(() => import('@/pages/SeasonClosedPage'))
 const WelcomePage  = lazy(() => import('@/pages/WelcomePage'))
 const LoadingPage  = lazy(() => import('@/pages/LoadingPage'))
 const HomePage     = lazy(() => import('@/pages/HomePage'))
@@ -47,7 +48,19 @@ function RequireLanguage({ children }: { children: ReactNode }) {
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
+// Inlined at build time: toggling it requires a redeploy (set in Vercel env).
+// While true the whole app is replaced by the closed-season notice, so nothing
+// ever calls Supabase (paused during the winter).
+const SEASON_CLOSED = import.meta.env.VITE_SEASON_CLOSED === 'true'
+
 export default function App() {
+  if (SEASON_CLOSED) {
+    return (
+      <Suspense fallback={<PageFallback />}>
+        <SeasonClosedPage />
+      </Suspense>
+    )
+  }
   return (
     <BrowserRouter>
       <LanguageProvider>
